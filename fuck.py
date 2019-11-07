@@ -17,7 +17,7 @@ field_upper = (255, 255, 255)
 cap = cv2.VideoCapture(0)
 pts = deque(maxlen=BUFFER_LEN)
 
-while(True):
+while True:
     ret, frame = cap.read()
     ratio = frame.shape[0] / float(frame.shape[0])
 

@@ -27,37 +27,6 @@ while(True):
         blurred = cv2.GaussianBlur(frame, (5, 5), 0)
         hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
 
-        # ball mask
-        ball_mask = cv2.inRange(hsv, ball_lower, ball_upper)
-        ball_mask = cv2.erode(ball_mask, None, iterations=2)
-        ball_mask = cv2.dilate(ball_mask, None, iterations=2)
-
-        ball_cnts = cv2.findContours(ball_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        ball_cnts = imutils.grab_contours(ball_cnts)
-        center = None
-
-        if len(ball_cnts) > 0:
-            ball_in_play = True
-
-            c = max(ball_cnts, key=cv2.contourArea)
-            (x, y), radius = cv2.minEnclosingCircle(c)
-            M = cv2.moments(c)
-            center = (int(M['m10'] / M['m00']), int(M['m01'] / M['m00']))
-
-            if radius > 3:
-                cv2.circle(frame, (int(x), int(y)), int(radius), (0, 255, 0), 3)
-
-                pts.appendleft(center)
-
-            for i in range(1, len(pts)):
-                if pts[i - 1] is None or pts[i] is None:
-                    continue
-
-                thickness = int(np.sqrt(BUFFER_LEN / float(i + 1)) * 2.5)
-                cv2.line(frame, pts[i - 1], pts[i], (0, 0, 255), thickness)
-        else:
-            ball_in_play = False
-
         # goal markers mask
         goals_mask = cv2.inRange(hsv, goals_lower, goals_upper)
         goals_mark = cv2.erode(goals_mask, None, iterations=2)
@@ -89,13 +58,45 @@ while(True):
 
                 cv2.line(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), thickness=3, lineType=8)
 
-            for c in goals_cnts:
-                (x, y), radius = cv2.minEnclosingCircle(c)
-                M = cv2.moments(c)
-                center = (int(M['m10'] / (M['m00'] + 1e-10)), int(M['m01'] / (M['m00'] + 1e-10)))
+        # ball mask
+        ball_mask = cv2.inRange(hsv, ball_lower, ball_upper)
+        ball_mask = cv2.erode(ball_mask, None, iterations=2)
+        ball_mask = cv2.dilate(ball_mask, None, iterations=2)
 
-                if radius > 3:
-                    cv2.circle(frame, (int(x), int(y)), int(radius), (0, 255, 0), 3)
+        ball_cnts = cv2.findContours(ball_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        ball_cnts = imutils.grab_contours(ball_cnts)
+        center = None
+
+        if len(ball_cnts) > 0:
+            ball_in_play = True
+
+            c = max(ball_cnts, key=cv2.contourArea)
+            (x, y), radius = cv2.minEnclosingCircle(c)
+            M = cv2.moments(c)
+            center = (int(M['m10'] / M['m00']), int(M['m01'] / M['m00']))
+
+            if len(pts) >= 2:
+                dX = pts[1][0] - pts[0][0]
+                if dX < 0:
+                    print('right')
+                elif dX > 0:
+                    print('left')
+                else:
+                    print('stationary')
+
+            if radius > 3:
+                cv2.circle(frame, (int(x), int(y)), int(radius), (0, 255, 0), 3)
+
+                pts.appendleft(center)
+
+            for i in range(1, len(pts)):
+                if pts[i - 1] is None or pts[i] is None:
+                    continue
+
+                thickness = int(np.sqrt(BUFFER_LEN / float(i + 1)) * 2.5)
+                cv2.line(frame, pts[i - 1], pts[i], (0, 0, 255), thickness)
+        else:
+            ball_in_play = False
 
     cv2.imshow('frame', frame)
 

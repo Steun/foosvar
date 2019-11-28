@@ -1,6 +1,7 @@
 import numpy as np
 import imutils
 import cv2
+import itertools
 
 from collections import deque
 
@@ -11,13 +12,13 @@ ball_in_play = False
 ball_lower = (92, 151, 36)
 ball_upper = (176, 255, 255)
 
-field_lower = (0, 209, 44)
-field_upper = (255, 255, 255)
+goals_lower = (13, 100, 158)
+goals_upper = (47, 255, 255)
 
 cap = cv2.VideoCapture(0)
 pts = deque(maxlen=BUFFER_LEN)
 
-while True:
+while(True):
     ret, frame = cap.read()
     ratio = frame.shape[0] / float(frame.shape[0])
 
@@ -57,23 +58,44 @@ while True:
         else:
             ball_in_play = False
 
-        # field mask
-        field_mask = cv2.inRange(hsv, field_lower, field_upper)
-        field_mask = cv2.erode(field_mask, None, iterations=2)
-        field_mask = cv2.dilate(field_mask, None, iterations=2)
+        # goal markers mask
+        goals_mask = cv2.inRange(hsv, goals_lower, goals_upper)
+        goals_mark = cv2.erode(goals_mask, None, iterations=2)
+        goals_mark = cv2.dilate(goals_mask, None, iterations=2)
 
-        field_cnts = cv2.findContours(field_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        field_cnts = imutils.grab_contours(field_cnts)
+        goals_cnts = cv2.findContours(goals_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        goals_cnts = imutils.grab_contours(goals_cnts)
+        center = None
 
-        for c in field_cnts:
-            peri = cv2.arcLength(c, True)
-            approx = cv2.approxPolyDP(c, 0.04 * peri, True)
+        if len(goals_cnts) > 0:
+            permutations = itertools.permutations(goals_cnts, 2)
+            distances = []
+            for a, b in permutations:
+                M1 = cv2.moments(a)
+                M2 = cv2.moments(b)
+                x1 = M1['m10'] / (M1['m00'] + 1e-10)
+                y1 = M1['m01'] / (M1['m00'] + 1e-10)
+                x2 = M2['m10'] / (M2['m00'] + 1e-10)
+                y2 = M2['m01'] / (M2['m00'] + 1e-10)
 
-            if len(approx) == 4:
-                c = c.astype('float')
-                c *= ratio
-                c = c.astype('int')
-                cv2.drawContours(frame, [c], -1, (255, 255, 0), 2)
+                distance = (x1 - x2)**2 + (y1 - y2)**2
+                distances.append(((x1, y1), (x2, y2), distance))
+
+            distances.sort(key=lambda x: x[-1])
+
+            for goal in distances[:1]:
+                x1, y1 = goal[0]
+                x2, y2 = goal[1]
+
+                cv2.line(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), thickness=3, lineType=8)
+
+            for c in goals_cnts:
+                (x, y), radius = cv2.minEnclosingCircle(c)
+                M = cv2.moments(c)
+                center = (int(M['m10'] / (M['m00'] + 1e-10)), int(M['m01'] / (M['m00'] + 1e-10)))
+
+                if radius > 3:
+                    cv2.circle(frame, (int(x), int(y)), int(radius), (0, 255, 0), 3)
 
     cv2.imshow('frame', frame)
 

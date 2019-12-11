@@ -7,7 +7,10 @@ from collections import deque
 
 BUFFER_LEN = 32
 
-ball_in_play = False
+ball = None
+ball_dX = 0
+goal_left = None
+goal_right = None
 
 ball_lower = (92, 151, 36)
 ball_upper = (176, 255, 255)
@@ -37,7 +40,11 @@ while(True):
         center = None
 
         if len(goals_cnts) > 0:
-            permutations = itertools.permutations(goals_cnts, 2)
+            permutations = []
+            for i, _ in enumerate(goals_cnts):
+                for j in range(i+1, len(goals_cnts)):
+                    permutations.append((goals_cnts[i], goals_cnts[j]))
+
             distances = []
             for a, b in permutations:
                 M1 = cv2.moments(a)
@@ -51,12 +58,21 @@ while(True):
                 distances.append(((x1, y1), (x2, y2), distance))
 
             distances.sort(key=lambda x: x[-1])
+            distances = list(dict.fromkeys(distances))
 
-            for goal in distances[:1]:
+            for goal in distances[:2]:
                 x1, y1 = goal[0]
                 x2, y2 = goal[1]
 
-                cv2.line(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), thickness=3, lineType=8)
+                if x1 < frame.shape[0]/2 + 20 and x2 < frame.shape[0]/2 + 20:
+                    goal_left = goal
+                    color = (0, 255, 0)
+                else:
+                    goal_right = goal
+                    color = (255, 0, 255)
+
+
+                cv2.line(frame, (int(x1), int(y1)), (int(x2), int(y2)), color, thickness=3, lineType=8)
 
         # ball mask
         ball_mask = cv2.inRange(hsv, ball_lower, ball_upper)
@@ -73,16 +89,11 @@ while(True):
             c = max(ball_cnts, key=cv2.contourArea)
             (x, y), radius = cv2.minEnclosingCircle(c)
             M = cv2.moments(c)
+            ball = M
             center = (int(M['m10'] / M['m00']), int(M['m01'] / M['m00']))
-
+            
             if len(pts) >= 2:
-                dX = pts[1][0] - pts[0][0]
-                if dX < 0:
-                    print('right')
-                elif dX > 0:
-                    print('left')
-                else:
-                    print('stationary')
+                ball_dX = pts[1][0] - pts[0][0]
 
             if radius > 3:
                 cv2.circle(frame, (int(x), int(y)), int(radius), (0, 255, 0), 3)
@@ -96,11 +107,22 @@ while(True):
                 thickness = int(np.sqrt(BUFFER_LEN / float(i + 1)) * 2.5)
                 cv2.line(frame, pts[i - 1], pts[i], (0, 0, 255), thickness)
         else:
-            ball_in_play = False
+            ball = None
 
     cv2.imshow('frame', frame)
 
-    print(ball_in_play)
+    if ball is not None:
+        ball_x = ball['m10'] / (ball['m00'] + 1e-10)
+        ball_y = ball['m01'] / (ball['m00'] + 1e-10)
+
+        print('Ball x: {} y: {}'.format(ball_x, ball_y))
+        if goal_left is not None:
+            if ball_x <= goal_left[0][0]:
+                print('goal left'*20)
+
+        if goal_right is not None:
+            if ball_x >= goal_right[0][0]:
+                print('goal right'*20)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
